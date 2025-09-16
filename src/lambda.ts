@@ -1,21 +1,25 @@
 import { webcrypto } from 'node:crypto';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import serverlessExpress from '@vendia/serverless-express';
+
 import {
   APIGatewayProxyEvent,
   Context,
   APIGatewayProxyResult,
 } from 'aws-lambda';
-import express from 'express';
 
-// Fix crypto issue for NestJS GraphQL
 if (!global.crypto) {
-  global.crypto = webcrypto as any;
+  (global as any).crypto = webcrypto;
 }
 
+if (!globalThis.crypto) {
+  (globalThis as any).crypto = webcrypto;
+}
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import serverlessExpress from '@vendia/serverless-express';
+
+import express from 'express';
 let cachedServer: any;
 
 async function createExpressServer(): Promise<express.Application> {
