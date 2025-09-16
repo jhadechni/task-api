@@ -107,11 +107,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${PdfStorageBucket}/*'
+                Resource: !Sub '${PdfStorageBucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref PdfStorageBucket
+                Resource: !GetAtt PdfStorageBucket.Arn
 
   # Lambda Function
   NotesApiFunction:
