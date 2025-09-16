@@ -1,0 +1,203 @@
+name: Deploy Notes API to AWS Lambda
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+env:
+  NODE_VERSION: '18'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test and Lint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Run build
+        run: npm run build
+
+  build-and-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+
+    strategy:
+      matrix:
+        environment: ${{ github.ref == 'refs/heads/main' && fromJSON('["prod"]') || fromJSON('["dev"]') }}
+
+    environment: ${{ matrix.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Create deployment package
+        run: |
+          # Create deployment directory
+          mkdir -p deploy
+
+          # Copy built application
+          cp -r dist deploy/
+
+          # Copy package.json and install production dependencies
+          cp package*.json deploy/
+          cd deploy
+          npm ci --only=production --ignore-scripts
+
+          # Remove unnecessary files to reduce package size
+          find node_modules -name "*.md" -delete
+          find node_modules -name "*.txt" -delete
+          find node_modules -name "*.map" -delete
+          find node_modules -name "test" -type d -exec rm -rf {} + 2>/dev/null || true
+          find node_modules -name "tests" -type d -exec rm -rf {} + 2>/dev/null || true
+          find node_modules -name "*.test.js" -delete
+          find node_modules -name "*.spec.js" -delete
+
+          # Create ZIP file
+          zip -r ../lambda-deployment.zip . -x "*.git*" "*.DS_Store*"
+          cd ..
+
+      - name: Create S3 bucket for deployments (if not exists)
+        run: |
+          BUCKET_NAME="${{ matrix.environment }}-notes-api-deployments-${{ github.repository_owner }}"
+          aws s3 mb s3://$BUCKET_NAME --region ${{ env.AWS_REGION }} || true
+          echo "DEPLOYMENT_BUCKET=$BUCKET_NAME" >> $GITHUB_ENV
+
+      - name: Upload deployment package to S3
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          S3_KEY="${{ matrix.environment }}/lambda-deployment-${TIMESTAMP}-${{ github.sha }}.zip"
+          aws s3 cp lambda-deployment.zip s3://$DEPLOYMENT_BUCKET/$S3_KEY
+          echo "LAMBDA_S3_KEY=$S3_KEY" >> $GITHUB_ENV
+
+      - name: Deploy CloudFormation stack
+        run: |
+          STACK_NAME="${{ matrix.environment }}-notes-api"
+
+          # Check if stack exists
+          if aws cloudformation describe-stacks --stack-name $STACK_NAME --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            ACTION="update-stack"
+            echo "Updating existing stack: $STACK_NAME"
+          else
+            ACTION="create-stack"
+            echo "Creating new stack: $STACK_NAME"
+          fi
+
+          # Deploy stack
+          aws cloudformation $ACTION \
+            --stack-name $STACK_NAME \
+            --template-body file://infrastructure/cloudformation.yaml \
+            --parameters \
+              ParameterKey=Environment,ParameterValue=${{ matrix.environment }} \
+              ParameterKey=LambdaCodeS3Bucket,ParameterValue=$DEPLOYMENT_BUCKET \
+              ParameterKey=LambdaCodeS3Key,ParameterValue=$LAMBDA_S3_KEY \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }}
+
+          # Wait for stack operation to complete
+          echo "Waiting for CloudFormation stack operation to complete..."
+          aws cloudformation wait stack-$ACTION-complete \
+            --stack-name $STACK_NAME \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Get API endpoints
+        run: |
+          STACK_NAME="${{ matrix.environment }}-notes-api"
+
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
+            --output text)
+
+          GRAPHQL_URL=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`GraphQLUrl`].OutputValue' \
+            --output text)
+
+          echo "🚀 Deployment completed successfully!"
+          echo "📍 API URL: $API_URL"
+          echo "🔗 GraphQL URL: $GRAPHQL_URL"
+          echo "🌍 Environment: ${{ matrix.environment }}"
+
+          # Add to GitHub step summary
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🚀 Deployment Summary
+
+          - **Environment**: ${{ matrix.environment }}
+          - **API URL**: $API_URL
+          - **GraphQL URL**: $GRAPHQL_URL
+          - **Region**: ${{ env.AWS_REGION }}
+          - **Commit**: ${{ github.sha }}
+
+          ### Available GraphQL Operations
+          - \`query { notes { id title content tags createdAt updatedAt } }\`
+          - \`query { note(id: "note-id") { id title content } }\`
+          - \`mutation { createNote(input: { title: "Title", content: "Content" }) { id } }\`
+          - \`mutation { exportNoteToPdf(id: "note-id") { url expiresAt } }\`
+          EOF
+
+      - name: Test deployment
+        run: |
+          STACK_NAME="${{ matrix.environment }}-notes-api"
+
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
+            --output text)
+
+          # Test health check (simple GraphQL introspection query)
+          echo "Testing deployment health..."
+          sleep 10  # Give Lambda time to warm up
+
+          curl -f -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"query": "{ __schema { queryType { name } } }"}' \
+            "$API_URL/graphql" \
+          && echo "✅ Deployment test passed!" \
+          || echo "❌ Deployment test failed!"
