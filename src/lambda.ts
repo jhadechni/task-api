@@ -48,10 +48,14 @@ async function createNestApp() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
+  const fastifyInstance = app.getHttpAdapter().getInstance();
+  const lambdaHandler = awsLambdaFastify(fastifyInstance as any);
   await app.init();
-  await app.getHttpAdapter().getInstance().ready();
+  await fastifyInstance.ready();
+  //await app.getHttpAdapter().getInstance().ready();
 
-  return app.getHttpAdapter().getInstance();
+  //return app.getHttpAdapter().getInstance();
+  return lambdaHandler;
 }
 
 export const handler = async (
