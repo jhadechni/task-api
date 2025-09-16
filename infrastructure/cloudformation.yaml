@@ -131,7 +131,6 @@ Resources:
           NODE_ENV: !Ref Environment
           DYNAMODB_TABLE_NAME: !Ref NotesTable
           S3_BUCKET_NAME: !Ref PdfStorageBucket
-          AWS_REGION: !Ref AWS::Region
       Tags:
         - Key: Environment
           Value: !Ref Environment
