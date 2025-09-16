@@ -5,6 +5,10 @@ export const validationSchema = Joi.object({
     .valid('development', 'production', 'test')
     .default('development'),
 
+  APP_ENV: Joi.string()
+    .valid('dev', 'staging', 'prod', 'development', 'production', 'test')
+    .optional(),
+
   PORT: Joi.number().default(3000),
 
   AWS_REGION: Joi.string().default('us-east-1'),

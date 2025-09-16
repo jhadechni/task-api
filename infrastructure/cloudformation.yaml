@@ -128,7 +128,8 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
-          NODE_ENV: !Ref Environment
+          NODE_ENV: production
+          APP_ENV: !Ref Environment
           DYNAMODB_TABLE_NAME: !Ref NotesTable
           S3_BUCKET_NAME: !Ref PdfStorageBucket
       Tags:

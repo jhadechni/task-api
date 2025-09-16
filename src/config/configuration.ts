@@ -3,6 +3,7 @@
 export default () => ({
   port: parseInt(process.env.PORT || '3000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
+  appEnv: process.env.APP_ENV || process.env.NODE_ENV || 'development',
 
   aws: {
     region: process.env.AWS_REGION || 'us-east-1',
@@ -18,9 +19,9 @@ export default () => ({
   },
 
   graphql: {
-    playground: process.env.NODE_ENV !== 'production',
+    playground: (process.env.APP_ENV || process.env.NODE_ENV) !== 'prod',
     introspection: true,
-    debug: process.env.NODE_ENV !== 'production',
+    debug: (process.env.APP_ENV || process.env.NODE_ENV) !== 'prod',
   },
 
   cache: {
