@@ -79,8 +79,8 @@ jobs:
           # Create deployment directory
           mkdir -p deploy
 
-          # Copy built application
-          cp -r dist deploy/
+          # Copy built application files to deployment root (flatten structure)
+          cp -r dist/* deploy/
 
           # Copy package.json and install production dependencies
           cp package*.json deploy/
