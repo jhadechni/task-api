@@ -2,8 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
-import { createServer, proxy } from 'aws-serverless-express';
-import { eventContext } from 'aws-serverless-express/middleware';
+import serverlessExpress from '@vendia/serverless-express';
 import {
   APIGatewayProxyEvent,
   Context,
@@ -11,15 +10,19 @@ import {
 } from 'aws-lambda';
 import express from 'express';
 
-let cachedServer: ReturnType<typeof createServer> | undefined;
+// Fix crypto issue for NestJS GraphQL
+import { webcrypto } from 'node:crypto';
+if (!global.crypto) {
+  global.crypto = webcrypto as any;
+}
+
+let cachedServer: any;
 
 async function createExpressServer(): Promise<express.Application> {
   const expressApp = express();
 
   const adapter = new ExpressAdapter(expressApp);
   const app = await NestFactory.create(AppModule, adapter);
-
-  app.use(eventContext());
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -32,6 +35,8 @@ async function createExpressServer(): Promise<express.Application> {
   app.enableCors({
     origin: true,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
   await app.init();
@@ -45,8 +50,8 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   if (!cachedServer) {
     const expressApp = await createExpressServer();
-    cachedServer = createServer(expressApp);
+    cachedServer = serverlessExpress({ app: expressApp });
   }
 
-  return proxy(cachedServer, event, context, 'PROMISE').promise;
+  return cachedServer(event, context);
 };
