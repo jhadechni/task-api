@@ -1,3 +1,8 @@
+const { webcrypto } = require('node:crypto');
+if (!global.crypto) {
+  global.crypto = webcrypto;
+}
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -11,10 +16,6 @@ import {
 import express from 'express';
 
 // Fix crypto issue for NestJS GraphQL
-import { webcrypto } from 'node:crypto';
-if (!global.crypto) {
-  global.crypto = webcrypto as any;
-}
 
 let cachedServer: any;
 
