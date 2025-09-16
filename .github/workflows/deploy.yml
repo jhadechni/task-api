@@ -139,7 +139,7 @@ jobs:
 
           # Wait for stack operation to complete
           echo "Waiting for CloudFormation stack operation to complete..."
-          aws cloudformation wait stack-$ACTION-complete \
+          aws cloudformation wait stack-$ACTION \
             --stack-name $STACK_NAME \
             --region ${{ env.AWS_REGION }}
 
