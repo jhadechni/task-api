@@ -24,12 +24,13 @@ import { validationSchema } from './config/validation';
       driver: ApolloDriver,
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        autoSchemaFile: configService.get('nodeEnv') === 'production' ? false : true,
+        autoSchemaFile:
+          configService.get('nodeEnv') === 'production' ? false : true,
         sortSchema: true,
         playground: configService.get('graphql.playground'),
         introspection: configService.get('graphql.introspection'),
         debug: configService.get('graphql.debug'),
-        context: ({ req }: { req: unknown }) => ({ req }),
+        context: ({ request }: { request: unknown }) => ({ request }),
       }),
     }),
     CachealoModule,

@@ -13,20 +13,26 @@ if (!global.crypto) {
 if (!globalThis.crypto) {
   (globalThis as any).crypto = webcrypto;
 }
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import serverlessExpress from '@vendia/serverless-express';
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify';
+import awsLambdaFastify from '@fastify/aws-lambda';
+import fastifyCors from '@fastify/cors';
 
-import express from 'express';
 let cachedServer: any;
 
-async function createExpressServer(): Promise<express.Application> {
-  const expressApp = express();
+async function createFastifyServer() {
+  const adapter = new FastifyAdapter();
 
-  const adapter = new ExpressAdapter(expressApp);
-  const app = await NestFactory.create(AppModule, adapter);
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    adapter
+  );
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -36,7 +42,7 @@ async function createExpressServer(): Promise<express.Application> {
     })
   );
 
-  app.enableCors({
+  await app.register(fastifyCors, {
     origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -44,8 +50,9 @@ async function createExpressServer(): Promise<express.Application> {
   });
 
   await app.init();
+  await app.getHttpAdapter().getInstance().ready();
 
-  return expressApp;
+  return app.getHttpAdapter().getInstance();
 }
 
 export const handler = async (
@@ -53,8 +60,8 @@ export const handler = async (
   context: Context
 ): Promise<APIGatewayProxyResult> => {
   if (!cachedServer) {
-    const expressApp = await createExpressServer();
-    cachedServer = serverlessExpress({ app: expressApp });
+    const fastifyApp = await createFastifyServer();
+    cachedServer = awsLambdaFastify(fastifyApp);
   }
 
   return cachedServer(event, context);
