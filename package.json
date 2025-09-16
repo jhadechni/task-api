@@ -25,7 +25,6 @@
     "@aws-sdk/lib-dynamodb": "^3.705.0",
     "@aws-sdk/s3-request-presigner": "^3.705.0",
     "@fastify/aws-lambda": "^6.1.1",
-    "@fastify/cors": "^10.0.1",
     "@jhadechine/cachealo": "^1.0.3",
     "@nestjs/apollo": "^13.1.0",
     "@nestjs/common": "^11.0.1",

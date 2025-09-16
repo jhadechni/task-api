@@ -22,7 +22,6 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import awsLambdaFastify from '@fastify/aws-lambda';
-import fastifyCors from '@fastify/cors';
 
 let cachedServer: any;
 
@@ -42,7 +41,7 @@ async function createFastifyServer() {
     })
   );
 
-  await app.register(fastifyCors, {
+  app.enableCors({
     origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -61,7 +60,7 @@ export const handler = async (
 ): Promise<APIGatewayProxyResult> => {
   if (!cachedServer) {
     const fastifyApp = await createFastifyServer();
-    cachedServer = awsLambdaFastify(fastifyApp);
+    cachedServer = awsLambdaFastify(fastifyApp as any);
   }
 
   return cachedServer(event, context);
