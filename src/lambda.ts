@@ -25,7 +25,7 @@ import awsLambdaFastify from '@fastify/aws-lambda';
 
 let cachedServer: any;
 
-async function createFastifyServer() {
+async function createNestApp() {
   const adapter = new FastifyAdapter();
 
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -59,7 +59,7 @@ export const handler = async (
   context: Context
 ): Promise<APIGatewayProxyResult> => {
   if (!cachedServer) {
-    const fastifyApp = await createFastifyServer();
+    const fastifyApp = await createNestApp();
     cachedServer = awsLambdaFastify(fastifyApp as any);
   }
 
