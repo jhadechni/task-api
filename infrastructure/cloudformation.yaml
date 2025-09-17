@@ -97,6 +97,7 @@ Resources:
                   - dynamodb:DeleteItem
                   - dynamodb:Scan
                   - dynamodb:Query
+                  - dynamodb:DescribeTable
                 Resource: !GetAtt NotesTable.Arn
         - PolicyName: S3Access
           PolicyDocument:
