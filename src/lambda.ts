@@ -1,9 +1,4 @@
 import { webcrypto } from 'node:crypto';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import serverless from 'serverless-http';
-import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
 
 // Polyfills de Crypto para entornos que lo requieran
 if (!global.crypto) {
@@ -12,6 +7,14 @@ if (!global.crypto) {
 if (!globalThis.crypto) {
   (globalThis as any).crypto = webcrypto;
 }
+
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
+import serverless from 'serverless-http';
+import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
+
+
 
 // Variable para almacenar en caché el manejador de serverless-http
 let cachedHandler: any;
