@@ -23,11 +23,6 @@ export class DynamoDbService {
 
     const dynamoClient = new DynamoDBClient({
       region,
-      credentials: {
-        accessKeyId: this.configService.get<string>('aws.accessKeyId') || '',
-        secretAccessKey:
-          this.configService.get<string>('aws.secretAccessKey') || '',
-      },
       ...(endpoint && { endpoint }),
     });
 
