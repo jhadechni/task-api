@@ -1,44 +1,33 @@
 import { webcrypto } from 'node:crypto';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
+import serverless from 'serverless-http';
+import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
 
-import {
-  APIGatewayProxyEvent,
-  Context,
-  APIGatewayProxyResult,
-} from 'aws-lambda';
-
+// Polyfills de Crypto para entornos que lo requieran
 if (!global.crypto) {
   (global as any).crypto = webcrypto;
 }
-
 if (!globalThis.crypto) {
   (globalThis as any).crypto = webcrypto;
 }
 
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import {
-  FastifyAdapter,
-  NestFastifyApplication,
-} from '@nestjs/platform-fastify';
-import awsLambdaFastify from '@fastify/aws-lambda';
+// Variable para almacenar en caché el manejador de serverless-http
+let cachedHandler: any;
 
-let cachedServer: any;
+// Función asíncrona para inicializar la aplicación y crear el manejador
+async function bootstrap() {
+  // 1. Crear la aplicación NestJS. Al no pasar un adaptador, usa Express por defecto.
+  const app = await NestFactory.create(AppModule, { logger: false });
 
-async function createNestApp() {
-  const adapter = new FastifyAdapter();
-
-  const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule,
-    adapter
-  );
-
+  // 2. Aplicar configuraciones globales (pipes, CORS, etc.)
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
-    })
+    }),
   );
 
   app.enableCors({
@@ -48,24 +37,26 @@ async function createNestApp() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
-  const fastifyInstance = app.getHttpAdapter().getInstance();
-  const lambdaHandler = awsLambdaFastify(fastifyInstance as any);
+  // 3. Inicializar la aplicación.
   await app.init();
-  await fastifyInstance.ready();
-  //await app.getHttpAdapter().getInstance().ready();
 
-  //return app.getHttpAdapter().getInstance();
-  return lambdaHandler;
+  // 4. Obtener la instancia de Express subyacente.
+  const expressApp = app.getHttpAdapter().getInstance();
+
+  // 5. Crear y devolver el manejador de serverless-http.
+  return serverless(expressApp);
 }
 
+// Handler principal de AWS Lambda
 export const handler = async (
   event: APIGatewayProxyEvent,
-  context: Context
+  context: Context,
 ): Promise<APIGatewayProxyResult> => {
-  if (!cachedServer) {
-    const fastifyApp = await createNestApp();
-    cachedServer = awsLambdaFastify(fastifyApp as any);
+  // Si el manejador no está en caché, lo creamos y lo guardamos.
+  if (!cachedHandler) {
+    cachedHandler = await bootstrap();
   }
 
-  return cachedServer(event, context);
+  // Usamos el manejador en caché para procesar el evento.
+  return cachedHandler(event, context);
 };
