@@ -119,7 +119,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-notes-api'
-      Runtime: nodejs18.x
+      Runtime: nodejs20.x
       Handler: lambda.handler
       Code:
         S3Bucket: !Ref LambdaCodeS3Bucket
